@@ -1,0 +1,309 @@
+---
+title: "Extraversion Exploration - Ireland and Pakistan"
+author: "Danny Rosen"
+date: "2023-12-04"
+output: pdf_document
+---
+
+# ROSEN_DANIEL_Psychometrics_0991
+
+The goal of this project is to assess the validity of a newly developed Extraversion scale composed of six dimensions: activity level, assertiveness, cheerfulness, excitement-seeking, friendliness, and gregariousness. Each dimension is measured through four items, with participants rating each item on a scale from 1 ("very inaccurate") to 5 ("very accurate"). The scale includes reverse-coding for items inversely related to Extraversion, such as "avoid crowds," to ensure positive relationships between all variables. The project aims to use statistical tools to evaluate the effectiveness of this scale in measuring Extraversion across two different countries.
+
+Data: 0991
+
+### First let's load our packages and requiste data.
+```{r, message = FALSE}
+library(tidyverse)
+library(EGAnet)
+library(ggplot2)
+
+load("./data/0991.RData")
+code_book <- read.csv("./data/extraversion_codebook.csv")
+
+survey_data <- extraversion[, -(1:5)]
+```
+
+### Now, let's help our friend answer some questions 
+
+To begin, the questions we need to initially answer focus on if our pilot survey succeeds at measuring "extraversion" the way we expect it to theoretically.
+
+**1)**
+The first question we need to answer is if our theoretical dimensions match the empirical dimensions. And further, if the items within those dimensions also match their expected dimensions. 
+```{r}
+original_ega <- EGA(
+  survey_data,
+  algorithm="louvain",
+  node.size = 6,
+  label.size=2,
+  plot.EGA = T
+)
+```
+The empirical structure identified 5 dimensions, while theoretically there should be 6 dimensions. Upon examination, the issue lies in gregariousness and friendliness being combined into one empirical dimension. This suggests similarity between the items or an underlying dimensionality problem. Examining the codebook, we can posit as to why these dimensions were grouped together. The trend of the questions the two groups ask are very similar. "Friendliness_3" asks if the participant '[avoids] contacts with others,' while 'gregariousness_3' asks if the participant '[prefers] to be alone.' Although they are not identical questions, as actively avoiding people is not the same as enjoying spending time alone, it is likely that many participants who would avoid people would also enjoy being alone. This idea is present in most of the items within the two dimensions and is likely the reason they are grouped together. 
+
+**2)**
+Next, we need to establish if this structure of this data is. To do this we can use bootstrapping to create another graph using an estimated distribution of this data.
+
+```{r}
+seed <- 123
+
+extraversion_boot_ega <-bootEGA(
+  survey_data,
+  algorithm="louvain",
+  node.size = 6,
+  label.size=2,
+  seed=seed
+)
+```
+
+Overall, the estimated structure demonstrates stability, replicating the 5 dimensions nearly 99% of the time under bootstrapping. This indicates it may generalize well. However, given there should theoretically be 6 dimensions, the 5 observed dimensions present an issue for matching the theoretical model. Let's examine this graph further.
+
+```{r}
+extraversion_stability <- dimensionStability(extraversion_boot_ega)
+summary(extraversion_stability)
+```
+
+```{r}
+extraversion_stability$item.stability$item.stability$all.dimensions
+```
+These findings further support our conclusion that the structure and dimensions within are stable. 
+
+
+**3)**
+We also need to know if there is local independence between our variables. Our assumption is that, if we account for our goal variable, or in this case "extraversion", our variables will no longer be correlated. We can test for this with Unidimensional Variable Analysis done by using the UVA() function. This function tests for weighted topological overlap which shows to what extent our variables measure the same things. 
+
+```{r}
+UVA(survey_data)
+```
+
+From the UVA results it is apparent that there are variables within the survey which are not unique and capture the same information as other questions. We know this because the assumption of local independence was violated for some item pairs, specifically between items within the same dimensions. For example, the excitement_seeking and activity_level dimensions had high overlap between items 1 & 2 and 3 & 4 within each respective dimension. To resolve, these items could be revised or dropped to improve uniqueness.
+
+### Country Differences
+
+The next questions we need to answer relate to how our survey differs between Ireland and Pakistan.
+First let's reset our survey dataframe such that the country labels are accessible. Then let's split them into two groups.
+
+```{r}
+survey_data_country <- extraversion[, -(1:4)]
+
+ireland_data <- survey_data_country %>%
+  filter(country == 'Ireland') %>%
+  select(-country)
+
+pakistan_data <- survey_data_country %>%
+  filter(country == 'Pakistan') %>%
+  select(-country)
+```
+
+**4)**
+First, let's see if between countries how our empirical structure compares to the theoretical. 
+```{r}
+ireland_ega <- EGA(
+  ireland_data,
+  algorithm="louvain",
+  node.size = 6,
+  label.size=2,
+  plot.EGA = T
+)
+```
+
+```{r}
+pakistan_ega <- EGA(
+  pakistan_data,
+  algorithm="louvain",
+  node.size = 6,
+  label.size=2,
+  plot.EGA = T
+)
+```
+
+The country analyses revealed notable differences in structure and stability. For Ireland, the structure matched expectations and demonstrated stability under bootstrapping. However for Pakistan, only 4 dimensions were identified and results were highly unstable across iterations. This indicates an issue generalizing the Pakistani survey structure. Differences in specific items were also revealed, suggesting possible cultural influences on the concept of extraversion. The only two dimensions which match between the countries are 'assertiveness' and the grouped-dimension of 'friendliness' and 'gregariousness'.
+
+**5)**
+Next, let's look at the instabilities of each of these structures. 
+```{r}
+ireland_boot_ega <-bootEGA(
+  ireland_data,
+  algorithm="louvain",
+  node.size = 6,
+  label.size=2,
+  seed=seed
+)
+```
+
+```{r}
+ireland_stability <- dimensionStability(ireland_boot_ega)
+summary(ireland_stability)
+```
+
+```{r}
+ireland_stability$item.stability$item.stability$all.dimensions
+```
+
+```{r}
+pakistan_boot_ega <-bootEGA(
+  pakistan_data,
+  algorithm="louvain",
+  node.size = 6,
+  label.size=2,
+  seed=seed
+)
+```
+
+```{r}
+pakistan_stability <- dimensionStability(pakistan_boot_ega)
+summary(pakistan_stability)
+```
+
+```{r}
+pakistan_stability$item.stability$item.stability$all.dimensions
+```
+As we can see, similar to the original structure, the Irish survey is very stable. We can see this because our bootstrapping reproduces the specific dimensions at least at a 97% rate with some being reproduced every time. Conversely, the Pakistani survey has a wildly unstable structure. Looking at the 'excitement-seeking', 'cheerfulness', and 'activity-level' dimensions, these are highly inconsistent across bootstrapping iterations. Given that the empirical structure has four dimensions, we know it is inconsistent because dimension two is only reproduced in that way 16.4% of the time and dimension one is only reproduced 65% of the time. In conclusion, the Irish survey is generalizable while the Pakistani survey is not. 
+
+Let's also look at the weighted topological overlap of the countries' surveys.
+```{r}
+UVA(ireland_data)
+```
+For the Irish survey, the only items with what is considered 'large-to-very large redundancy' is activity_level 1 and 2. This has a wTO of .4 which is extremely large and needs to be managed. There are also several item-pairs with moderate to large wTO including excitement_seeking 3 and 4, assertiveness 1 with both assertiveness 2 and 3, cheerfulness 3 and 4, and assertiveness 2 and 3. 
+
+```{r}
+UVA(pakistan_data)
+```
+Interestingly, despite the instability of the Pakistani survey, there are no item pair with large to very large wTOs. The 3 pairs with noticeable wTOs are assertiveness 3 with both assertiveness 1 and 2 and excitement_seeking 3 and 4. 
+
+### Invariance
+
+**6)**
+Now that we have established that the survey has shown different results in Ireland and Pakistan, the question we need to answer is which of the items are the invariant across country lines and which are not. First, we need to set up our theoretical structure.
+
+```{r}
+theoretical <- rep(1:4, 6)
+```
+
+
+```{r}
+country_invariance <- invariance(
+  data = survey_data,
+  groups = survey_data_country$country,
+  structure = theoretical,
+  seed = 123
+)
+```
+```{r}
+plot(country_invariance, node.size = 5, label.size = 1.5)
+country_invariance$results %>%
+  filter(!(sig %in% c("", '.')))
+```
+
+These results show us that there are two items which are not being measured the same way across the countries. The first of these is 'gregariousness_2' which asks the participants if they "Talk to a lot of different people at parties," and 'activity_level_4' which ask if the participants if they "Like to take it easy." Interestingly, it would appear that talking to alot of different people at parties is a better measure of extraversion for Pakistani participants than for Irish participants, while enjoying taking it easy is a better measure extraversion for Irish participants than the Pakistani participants. We know this by looking at the significance and direction measures provided by the invariance() function. 
+
+With these differences in mind, we now need to come up with a hypothesis about why these might be occurring and an experiment which could be used evaluate them. 
+
+**Hypothesis**
+We believe the differences in measurement for 'gregariousness_2' and 'activity_level_4' may be due to respective cultural influence on perceptions of extraversion:
+
+**Pakistani Participants:** In Pakistan, the concept of extraversion might be more closely linked to social engagement in large groups, such as talking to various people at parties. This reflects a cultural emphasis on community and social interactions.
+
+**Irish Participants:** For the Irish group, extraversion may be more associated with a relaxed, easy-going attitude rather than overt social engagement. This could indicate a cultural preference for subtler forms of social interaction.
+
+**Experiment:**
+To test this hypothesis, I would perform a qualitative experiment which would involve interviewing a diverse group of people from both Pakistan and Ireland and exploring participants' personal interpretations of extraversion, focusing on their views on socializing at parties and relaxation as indicators of extraversion. Because we already have plenty of quantitative data about extraversion in the current survey, I believe collecting additional qualitative data would help us answer our questions.
+
+Once the interview data was collected, we could perform thematic analysis to identify common themes and cultural nuances in the perception of extraversion. For example, topic modeling could be done on the responses to highlight key cultural tropes or large language models could be used to summarize the responses and to make the large amount of data digestible for researchers. The questions could then be adjusted to make our survey more generalization and informative.
+
+7)
+Finally, we need to help our friend in determining if the responses given in their survey can be used to predict the age of the respondent. And further, if it can be predicted, is it different between the countries and which variables are most correlated. To start, let's break down our original 'extraversion' dataframe so we can proceed.
+```{r}
+voi <- !(colnames(extraversion) %in% c("id", "sex", "year"))
+age_data <- extraversion[, voi]
+row.names(age_data) <- NULL
+
+age_data_ireland <- age_data %>%
+  filter(country == 'Ireland') %>%
+  select(-country)
+
+age_data_pakistan <- age_data %>%
+  filter(country == 'Pakistan') %>%
+  select(-country)
+```
+
+Next, let's break these down into test and training sets. We will use 80% of rows for training and 20% for testing. 
+```{r}
+set.seed(123)
+#Ireland
+i_size = nrow(age_data_ireland)
+ireland_train_idx <- sample(1:i_size, as.integer(.8*i_size), replace = F)
+ireland_test_idx <- (1:i_size)[!(1:i_size %in% ireland_train_idx)]
+ireland_train = age_data_ireland[ireland_train_idx, ]
+ireland_test = age_data_ireland[ireland_test_idx, ]
+
+#Pakistan
+p_size = nrow(age_data_pakistan)
+pakistan_train_idx <- sample(1:p_size, as.integer(.8*i_size), replace = F)
+pakistan_test_idx <- (1:i_size)[!(1:i_size %in% pakistan_train_idx)]
+pakistan_train = age_data_pakistan[pakistan_train_idx, ]
+pakistan_test = age_data_pakistan[pakistan_test_idx, ]
+```
+
+Now, let's create a linear model between the dimensions and age for both countries' data and see the results. First, Ireland.
+
+```{r}
+ireland_lm <- lm(
+  age ~ .,
+  ireland_train
+)
+
+summary(ireland_lm)
+```
+
+```{r}
+rmse <- function(preds, target){
+  error <- preds - target
+  se <- error ^ 2
+  mse <- mean(se)
+  rmse <- sqrt(mse)
+  return(rmse)
+}
+
+mae <- function(preds, target){
+  me <- abs(preds - target)
+  mae <- mean(me)
+  return(mae)
+}
+```
+
+```{r}
+ireland_targets <- ireland_test$age
+
+ireland_predictions <- predict.lm(
+  ireland_lm,
+  ireland_test
+)
+
+paste("Mean Absolute Error for Ireland LM:", mae(ireland_predictions, ireland_targets))
+paste("Root Mean Squared Error for Ireland LM:", rmse(ireland_predictions, ireland_targets))
+```
+
+Next, Pakistan. 
+
+```{r}
+pakistan_lm <- lm(
+  age ~ .,
+  pakistan_train
+)
+
+summary(pakistan_lm)
+```
+```{r}
+pakistan_targets <- pakistan_test$age
+
+pakistan_predictions <- predict.lm(
+  pakistan_lm,
+  pakistan_test
+)
+
+paste("Mean Absolute Error for Pakistan LM:", mae(pakistan_predictions, pakistan_targets))
+paste("Root Mean Squared Error for Pakistan LM:", rmse(pakistan_predictions, pakistan_targets))
+```
+
+In analyzing the survey data from Ireland and Pakistan for age prediction in ad campaigns, the Irish model shows a Mean Absolute Error (MAE) of 6.67 years and a Root Mean Square Error (RMSE) of 9.12 years. This indicates that while the model generally predicts within about 6.5 years of the actual age, it occasionally makes larger errors, as evidenced by the RMSE being 137% larger than the MAE. A significant predictor in this model is 'excitement_seeking_4', which seems to correlate with younger age groups, particularly teenagers and college students, who might agree more with 'acting wild and crazy'. In contrast, the Pakistani model, despite its less stable graph analysis structure, is more accurate in predicting ages, with a MAE of 5.89 and a RMSE of 7.43. This model's consistency and fewer large-scale errors are highlighted by the RMSE being only 126% of the MAE. Unlike the Irish model, the Pakistani model relies on multiple moderate-to-strong predictors such as 'cheerfulness_1', 'cheerfulness_2', and 'excitement_seeking_1', which may capture a broader range of age-related behaviors. This difference in significant predictors between the models could be attributed to inherent cultural variations influencing responses in each country, a crucial factor in cross-cultural data analysis. Overall, these findings provide valuable insights for tailoring effective ad campaigns in each respective country.
+
